@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 import psycopg
 from psycopg_pool import ConnectionPool
 import os
 from pydantic import BaseModel, Field
-from typing import Optional, Annotated
+from typing import Optional, Annotated, List
+from psycopg.rows import dict_row
 
 pool: Optional[ConnectionPool] = None
 
@@ -15,8 +16,8 @@ class BookBase(BaseModel):
 
 
 class Book(BookBase):
-     book_id: int
-     coverPath: Optional[str] = None
+    id: int
+    coverPath: Optional[str] = None
 
 
 class BookUpdate(BaseModel):
@@ -28,6 +29,11 @@ class BookUpdate(BaseModel):
           min_length=3, max_length=100)]] = None
 
 app = FastAPI()
+
+def get_db():
+    global pool
+    with pool.connection() as conn:
+        yield conn
 
 @app.on_event("startup")
 def startup():
@@ -48,5 +54,11 @@ def startup():
         return {"Connection to database failed":e}
 
 @app.get("/")
-def find(q: Annotated[str, Field(min_length=3, max_length=50)]):
-    return {"Hello":q}
+def find(q: Annotated[str, Field(min_length=3, max_length=50)], conn=Depends(get_db)) -> dict:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT * FROM books WHERE title ILIKE %s OR author ILIKE %s LIMIT 10", (f"%{q}%", f"%{q}%",))
+        rows = cur.fetchall()
+
+    books = [Book(**dict(r)) for r in rows]
+
+    return {"books": books}
