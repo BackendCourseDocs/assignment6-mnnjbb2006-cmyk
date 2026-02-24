@@ -62,3 +62,11 @@ def find(q: Annotated[str, Field(min_length=3, max_length=50)], conn=Depends(get
     books = [Book(**dict(r)) for r in rows]
 
     return {"books": books}
+
+@app.post("/add/")
+def add_book(book: BookBase, conn=Depends(get_db)) -> dict:
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO books (title, author, year, publisher) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (book.title, book.author, book.year, book.publisher))
+        book_id = cur.fetchone()[0]
+    return {"id": book_id}
