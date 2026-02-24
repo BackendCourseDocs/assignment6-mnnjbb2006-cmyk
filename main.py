@@ -77,3 +77,22 @@ def delete_book(book_id: int, conn=Depends(get_db)) -> dict:
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Book not found")
         return {"status": "success"}
+
+@app.put("/update/{book_id}", response_model=Book)
+def update_book(book_id: int, book: BookUpdate, conn=Depends(get_db)) -> Book:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT * FROM books WHERE id = %s", (book_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Book not found")
+        updated_book = Book(**dict(cur.fetchone()))
+        if book.title:
+            updated_book.title = book.title
+        if book.author:
+            updated_book.author = book.author
+        if book.year:
+            updated_book.year = book.year
+        if book.publisher:
+            updated_book.publisher = book.publisher
+        cur.execute("UPDATE books SET title = %s, author = %s, year = %s, publisher = %s WHERE id = %s",
+                    (updated_book.title, updated_book.author, updated_book.year, updated_book.publisher, book_id))
+        return updated_book
